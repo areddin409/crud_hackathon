@@ -1,10 +1,30 @@
 import { Module } from '@nestjs/common';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
+import { APP_GUARD } from '@nestjs/core';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ArcjetModule, ArcjetGuard, shield, slidingWindow } from '@arcjet/nest';
+import { AppController } from './app.controller.js';
+import { AppService } from './app.service.js';
 
 @Module({
-  imports: [],
+  imports: [
+    ConfigModule.forRoot({ isGlobal: true }),
+    ArcjetModule.forRootAsync({
+      isGlobal: true,
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        key: config.getOrThrow<string>('ARCJET_KEY'),
+        rules: [
+          shield({ mode: 'LIVE' }),
+          slidingWindow({
+            mode: 'LIVE',
+            interval: '1m',
+            max: 10,
+          }),
+        ],
+      }),
+    }),
+  ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, { provide: APP_GUARD, useClass: ArcjetGuard }],
 })
 export class AppModule {}
