@@ -20,7 +20,7 @@ import { PrismaModule } from './lib/database/prisma.module.js';
           slidingWindow({
             mode: 'LIVE',
             interval: '1m',
-            max: config.get<number>('ARCJET_RATE_LIMIT_MAX', 60),
+            max: parseInt(config.get('ARCJET_RATE_LIMIT_MAX', '60'), 10),
           }),
         ],
       }),
