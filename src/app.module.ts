@@ -20,7 +20,7 @@ import { PrismaModule } from './lib/database/prisma.module.js';
           slidingWindow({
             mode: 'LIVE',
             interval: '1m',
-            max: 10,
+            max: 60,
           }),
         ],
       }),
