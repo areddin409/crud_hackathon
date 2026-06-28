@@ -2,8 +2,7 @@ import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ArcjetModule, ArcjetGuard, shield, slidingWindow } from '@arcjet/nest';
-import { AuthModule } from '@thallesp/nestjs-better-auth';
-import { auth } from './lib/auth/auth.js';
+import { AuthModule } from './lib/auth/auth.module.js';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { PrismaModule } from './lib/database/prisma.module.js';
@@ -12,7 +11,7 @@ import { PrismaModule } from './lib/database/prisma.module.js';
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     PrismaModule,
-    AuthModule.forRoot({ auth }),
+    AuthModule,
     ArcjetModule.forRootAsync({
       isGlobal: true,
       inject: [ConfigService],

@@ -8,7 +8,7 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bodyParser: false });
   app.use(helmet());
   app.use((req: Request, res: Response, next: NextFunction) => {
-    if (req.path.startsWith('/api/auth')) return next();
+    if (req.path === '/api/auth' || req.path.startsWith('/api/auth/')) return next();
     express.json()(req, res, next);
   });
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }));
