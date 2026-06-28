@@ -1,6 +1,6 @@
-# Memory — ArcJet + Prisma Setup + Review Fixes
+# Memory — ArcJet + Prisma + Better Auth Setup
 
-Last updated: 2026-06-27 7:00 PM
+Last updated: 2026-06-27 7:30 PM
 
 ## What was built
 
@@ -30,6 +30,16 @@ Last updated: 2026-06-27 7:00 PM
 - Raised ArcJet `slidingWindow` max from 10 → config-driven via `config.get<number>('ARCJET_RATE_LIMIT_MAX', 60)`; `.env` sets `ARCJET_RATE_LIMIT_MAX=100` for dev
 - PR #1 opened on `fix/jest-esm-rate-limit`, CodeRabbit reviewed (one comment addressed), merged to main
 
+### Session 4 — Better Auth Integration (current branch: feat/better-auth)
+- Installed `better-auth@1.6.22`, `@thallesp/nestjs-better-auth@2.6.1`, `express@5.2.1` (direct dep required for ESM)
+- `prisma/schema.prisma`: added Better Auth tables — `user`, `session`, `account`, `verification`; `role` field on `user` as `String @default("PARTICIPANT")`
+- `src/lib/auth/auth.ts`: Better Auth instance — Prisma adapter (`PrismaPg`), email/password enabled, `role` additionalField with `defaultValue: 'PARTICIPANT'` and `input: false`; `baseURL` and `trustedOrigins` from env vars (`BETTER_AUTH_URL`, `BETTER_AUTH_TRUSTED_ORIGINS`)
+- `src/main.ts`: `bodyParser: false` (required by Better Auth); selective `express.json()` middleware skips `/api/auth/**`
+- `src/app.module.ts`: `AuthModule.forRoot({ auth })` added to imports
+- Migration applied via Prisma MCP (advisory lock workaround — see Problems Solved); migration file at `prisma/migrations/20260627000000_better_auth/migration.sql`; `_prisma_migrations` record manually inserted
+- Prisma client regenerated (`npx prisma generate`)
+- Sign-up and sign-in confirmed working in Postman; user created with `role: PARTICIPANT`
+
 ## Decisions made
 
 - Full ESM (NodeNext) chosen because `@arcjet/nest` is ESM-only — no SWC, no extra tooling
@@ -40,8 +50,11 @@ Last updated: 2026-06-27 7:00 PM
 - `DATABASE_URL` (direct postgres) used for both migrations and runtime adapter
 - `PRISMA_ACCELERATE_URL` stored in `.env` for future edge use but not wired yet
 - Rate limit max pulled from `ARCJET_RATE_LIMIT_MAX` env var; production default is 60, dev uses 100
-- Database resource ID: `db_cmqwwsqth20o4zyf5wd37fcqz` (Prisma Postgres managed)
+- Database resource ID: `db_cmqwwsqth20o4zyf5wd37fcqz` (Prisma Postgres managed); project ID: `proj_cmqwwsqth20o6zyf50pfq2yco`
 - Jest binary invoked as `node_modules/jest/bin/jest.js` directly — `.bin/jest` shim is a bash script that breaks on Windows with `node`
+- `role` stored as plain `String` in Prisma (not enum) — avoids Better Auth Prisma adapter compatibility issues with enum types
+- `input: false` on role additionalField — prevents clients from setting role during sign-up
+- `express` added as direct dependency (not just transitive via `@nestjs/platform-express`) — ESM requires direct package listing
 
 ## Problems solved
 
@@ -51,26 +64,28 @@ Last updated: 2026-06-27 7:00 PM
 - pnpm v10 blocks Prisma postinstall: add `pnpm.onlyBuiltDependencies` to `package.json`
 - `node_modules/.bin/jest` is a bash shim — can't be passed to `node` on Windows; use `node_modules/jest/bin/jest.js` instead
 - Jest + ESM: `ts-jest` needs `useESM: true` + `extensionsToTreatAsEsm` + `moduleNameMapper` for `.js` imports
+- Prisma advisory lock stuck after killing background migration process: Prisma CLI couldn't acquire lock (PID 55 on pooled connection held it, no superuser to terminate). Workaround: applied schema SQL via `mcp__prisma__execute_prisma_postgres_schema_update`, created `_prisma_migrations` table and inserted record manually via MCP SQL tool, then ran `npx prisma generate` directly
+- `express` not found in ESM: transitive deps aren't resolvable in strict ESM — ran `pnpm add express` to make it direct
+- Better Auth `403 MISSING_OR_NULL_ORIGIN`: all auth requests need `Origin: http://localhost:3000` header (CSRF protection) — must be set in Postman/curl and will come naturally from browser
 
 ## Current state
 
-- `main` is clean and up to date after PR #1 merge
-- App starts clean with `pnpm start:dev`
-- PrismaModule connected on startup; ArcJet guard active globally
-- `pnpm test` exits 0 (no unit tests yet, passWithNoTests)
-- Schema has no models — `prisma/schema.prisma` is empty (just generator + datasource)
-- No feature modules built yet
+- `feat/better-auth` branch — not yet merged to main
+- App starts and runs; sign-up and sign-in confirmed working
+- Better Auth guard active globally (all routes protected unless `@AllowAnonymous()`)
+- ArcJet guard still active globally (runs before auth guard)
+- Schema has all Better Auth tables + role field; Prisma client regenerated
+- No feature modules built yet — no domain model beyond auth
 
 ## Next session starts with
 
-Define the domain model in `prisma/schema.prisma` (decide what resources the CRUD app needs), then `pnpm db:migrate -- --name <model>` to create the migration and regenerate the client. After that, scaffold feature modules: `nest g module`, `nest g service`, `nest g controller` in `src/module/<name>/`. Feature services inject `PrismaService` and access DB via `this.prismaService.db.<model>.findMany()`.
+Merge `feat/better-auth` to main (or open PR). Then define the domain model — what resources does this hackathon CRUD app manage? Add models to `prisma/schema.prisma`, run `npx prisma migrate dev --name <model>`, scaffold feature modules with `nest g module/service/controller` in `src/module/<name>/`. Feature services inject `PrismaService` and access DB via `this.prismaService.db.<model>`.
 
-Also address the two remaining minor review items when convenient:
-- Add `app.useGlobalPipes(new ValidationPipe({ whitelist: true }))` to `src/main.ts`
-- Consider setting `noImplicitAny: true` in `tsconfig.json`
+Also wire up role-based access: create a `Roles` decorator + `RolesGuard` in `src/common/` using the `@Session()` decorator from `@thallesp/nestjs-better-auth` to read `session.user.role`.
 
 ## Open questions
 
-- What features/resources does this hackathon CRUD app need? (no domain model defined — first question for next session)
+- What resources/models does this hackathon CRUD app need? (domain model still undefined)
 - Remote ArcJet dashboard rules (shield + rate limit) still in DRY_RUN — promote to LIVE via MCP `promote-rule` once traffic flows
 - `PRISMA_ACCELERATE_URL` in `.env` but unused — wire up later for edge/serverless
+- Advisory lock PID 55 may still be held in the connection pool — run `npx prisma migrate status` next session to confirm everything is clean
