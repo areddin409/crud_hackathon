@@ -6,6 +6,7 @@ import { AuthModule } from './lib/auth/auth.module.js';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { PrismaModule } from './lib/database/prisma.module.js';
+import { UserModule } from './module/user/user.module.js';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { PrismaModule } from './lib/database/prisma.module.js';
         ],
       }),
     }),
+    UserModule,
   ],
   controllers: [AppController],
   providers: [AppService, { provide: APP_GUARD, useClass: ArcjetGuard }],
